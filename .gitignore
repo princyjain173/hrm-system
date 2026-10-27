@@ -2,6 +2,10 @@
 node_modules/
 **/node_modules/
 
+# Lock files (prevents OS architecture mismatch like Windows vs Linux rollup binaries)
+package-lock.json
+**/package-lock.json
+
 # Environment files
 .env
 **/.env
