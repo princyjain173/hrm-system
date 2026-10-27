@@ -5,7 +5,7 @@
   "scripts": {
     "start": "node hrm/server/server.js",
     "seed": "node hrm/server/seed.js",
-    "build": "npm run build --prefix hrm/client",
+    "build": "npm install --prefix hrm/server && npm install --prefix hrm/client && npm run build --prefix hrm/client",
     "dev:server": "npm run dev --prefix hrm/server",
     "dev:client": "npm run dev --prefix hrm/client"
   },

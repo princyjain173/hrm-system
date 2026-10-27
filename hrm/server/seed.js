@@ -2,20 +2,20 @@ require('dotenv').config();
 const mongoose = require('mongoose'), bcrypt = require('bcryptjs');
 const { User, Employee, Attendance, Leave, Announcement, Training, Notification } = require('./models');
 
-(async () => {
+async function seedData(clearExisting = true) {
   try {
-    await mongoose.connect(process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/hrm');
-    console.log('Connected to MongoDB. Resetting collections...');
-
-    await Promise.all([
-      User.deleteMany(),
-      Employee.deleteMany(),
-      Attendance.deleteMany(),
-      Leave.deleteMany(),
-      Announcement.deleteMany(),
-      Training.deleteMany(),
-      Notification.deleteMany()
-    ]);
+    if (clearExisting) {
+      console.log('Resetting existing database collections...');
+      await Promise.all([
+        User.deleteMany(),
+        Employee.deleteMany(),
+        Attendance.deleteMany(),
+        Leave.deleteMany(),
+        Announcement.deleteMany(),
+        Training.deleteMany(),
+        Notification.deleteMany()
+      ]);
+    }
 
     const password = await bcrypt.hash('Pass@123', 10);
 
@@ -99,8 +99,6 @@ const { User, Employee, Attendance, Leave, Announcement, Training, Notification 
     const twoDaysAgo = new Date(Date.now() - 2 * 864e5);
     const twoDaysAgoStr = twoDaysAgo.toLocaleDateString('en-CA');
 
-    // Today's attendance
-    const now = new Date();
     const inTime1 = new Date();
     inTime1.setHours(9, 12, 0, 0);
 
@@ -110,14 +108,12 @@ const { User, Employee, Attendance, Leave, Announcement, Training, Notification 
     outTime2.setHours(17, 30, 0, 0);
 
     await Attendance.create([
-      { user: emp._id, date: todayStr, checkIn: inTime1 }, // Currently checked in
+      { user: emp._id, date: todayStr, checkIn: inTime1 },
       { user: mgr._id, date: todayStr, checkIn: inTime2, checkOut: outTime2 },
       { user: alex._id, date: todayStr, checkIn: inTime2 },
       { user: hr._id, date: todayStr, checkIn: inTime1 },
-      // Yesterday's attendance for history
       { user: emp._id, date: yesterdayStr, checkIn: new Date(yesterday.setHours(9, 5, 0)), checkOut: new Date(yesterday.setHours(17, 45, 0)) },
       { user: mgr._id, date: yesterdayStr, checkIn: new Date(yesterday.setHours(8, 50, 0)), checkOut: new Date(yesterday.setHours(18, 0, 0)) },
-      // Two days ago
       { user: emp._id, date: twoDaysAgoStr, checkIn: new Date(twoDaysAgo.setHours(9, 0, 0)), checkOut: new Date(twoDaysAgo.setHours(17, 30, 0)) }
     ]);
 
@@ -165,10 +161,23 @@ const { User, Employee, Attendance, Leave, Announcement, Training, Notification 
       { user: hr._id, message: 'Welcome Anita! You have full HR admin privileges configured.', read: false }
     ]);
 
-    console.log('✅ StaffSync Database Seeded Successfully with comprehensive demo data!');
-    process.exit(0);
+    console.log('✅ StaffSync Database Seeded with comprehensive demo workforce data!');
   } catch (err) {
     console.error('❌ Seeding error:', err);
-    process.exit(1);
+    throw err;
   }
-})();
+}
+
+if (require.main === module) {
+  mongoose.connect(process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/hrm')
+    .then(async () => {
+      await seedData(true);
+      process.exit(0);
+    })
+    .catch(err => {
+      console.error(err);
+      process.exit(1);
+    });
+}
+
+module.exports = { seedData };
