@@ -6,6 +6,29 @@ const app = express();
 
 app.use(cors({ origin: '*' }));
 app.use(express.json({ limit: '200kb' }));
+
+let isDbConnected = false;
+
+// Health check endpoint
+app.get('/api/health', (req, res) => {
+  res.json({
+    status: 'ok',
+    database: isDbConnected ? 'connected' : 'disconnected',
+    mongoConfigured: !!process.env.MONGO_URI
+  });
+});
+
+// Middleware to check database connection on API routes
+app.use('/api', (req, res, next) => {
+  if (req.path === '/health') return next();
+  if (!isDbConnected && mongoose.connection.readyState !== 1) {
+    return res.status(503).json({
+      message: 'Database is connecting or MONGO_URI is missing in Render environment variables. Please check your Render configuration.'
+    });
+  }
+  next();
+});
+
 app.use('/api', require('./routes'));
 
 // Static serving for built React client
@@ -27,10 +50,25 @@ app.use((err, req, res, next) => {
 });
 
 const PORT = process.env.PORT || 5000;
-mongoose.connect(process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/hrm')
+
+// Listen on all network interfaces ('0.0.0.0') for Render compatibility
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`StaffSync HRM server running on port ${PORT}`);
+});
+
+// Connect to MongoDB asynchronously without crashing the web process
+const mongoUri = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/hrm';
+
+if (!process.env.MONGO_URI) {
+  console.warn('⚠️ WARNING: MONGO_URI is not set in environment variables! Using local fallback.');
+}
+
+console.log('Connecting to MongoDB...');
+mongoose.connect(mongoUri, { serverSelectionTimeoutMS: 15000 })
   .then(async () => {
+    isDbConnected = true;
+    console.log('✅ Connected to MongoDB successfully.');
     try {
-      // Auto-seed if database is empty (ideal for fresh cloud deployments like Render)
       const userCount = await User.countDocuments();
       if (userCount === 0) {
         console.log('Database is empty. Automatically initializing demo data...');
@@ -39,6 +77,9 @@ mongoose.connect(process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/hrm')
     } catch (seedErr) {
       console.warn('Initial seed check warning:', seedErr.message);
     }
-    app.listen(PORT, () => console.log(`StaffSync HRM server running on port ${PORT}`));
   })
-  .catch(e => { console.error('MongoDB connection failed:', e.message); process.exit(1); });
+  .catch(e => {
+    isDbConnected = false;
+    console.error('❌ MongoDB connection failed:', e.message);
+    console.error('👉 If deploying on Render: verify MONGO_URI in Render > Environment and ensure IP 0.0.0.0/0 is whitelisted in MongoDB Atlas.');
+  });
